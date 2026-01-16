@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import numpy as np
 import random
 import time
@@ -12,6 +14,7 @@ def main():
         read_type="s3",
     )
 
+    # Timing sequential.
     # times = []
     # for it in range(5):
     #     query_ids = [random.randint(0, 65535) for _ in range(5)]
@@ -22,10 +25,27 @@ def main():
     #     times.append(end_time - start_time)
     # print('Average time:', np.mean(times))
 
-    input_ids = [5613, 4086, 9068]
+    # Timing threading.
+    start = time.time()
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = (
+            executor.submit(
+                engine.count,
+                input_ids=query_ids
+            )
+            for query_ids in [[random.randint(0, 65535) for _ in range(5)] for _ in range(10)]
+        )
 
-    print(engine.count(input_ids=input_ids))
-    print()
+        for future in as_completed(futures):
+            result = future.result()
+            print(result)
+    end = time.time()
+    print('Total time:', end - start)
+
+    # input_ids = [5613, 4086, 9068]
+    #
+    # print(engine.count(input_ids=input_ids))
+    # print()
     # print(engine.prob(prompt_ids=input_ids[:-1], cont_id=input_ids[-1]))
     # print()
     # print(engine.ntd(prompt_ids=input_ids[:-1]))
