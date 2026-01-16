@@ -39,7 +39,7 @@ def main():
     with ThreadPoolExecutor(max_workers=50) as executor:
         futures = (
             executor.submit(
-                engine.count,
+                engine.find,
                 input_ids=query_ids
             )
             for query_ids in [tokenizer.encode("natural language processing") for _ in range(10)]
