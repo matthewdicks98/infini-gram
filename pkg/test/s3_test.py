@@ -10,9 +10,10 @@ from infini_gram.engine import InfiniGramEngine
 def main():
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
-        "allenai/OLMo-7B",
+        "allenai/OLMo-7B-hf",
         add_bos_token=False,
-        add_eos_token=False
+        add_eos_token=False,
+        trust_remote_code=True,
     )
 
     engine = InfiniGramEngine(
