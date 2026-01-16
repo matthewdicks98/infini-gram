@@ -154,6 +154,9 @@ class Engine:
 
         self.num_shards = len(self.shards)
 
+        self.shards = self.shards[:2]
+        self.num_shards = 2
+
     def get_bytes(self, key: str, b: int, e: int) -> bytes:
 
         t = time.time()
