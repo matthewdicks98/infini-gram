@@ -42,7 +42,7 @@ def main():
                 engine.count,
                 input_ids=query_ids
             )
-            for query_ids in [tokenizer.encode("what has Donald Trump been up to lately") for _ in range(10)]
+            for query_ids in [tokenizer.encode("natural language processing") for _ in range(10)]
         )
 
         for future in as_completed(futures):
