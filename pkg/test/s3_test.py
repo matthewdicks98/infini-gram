@@ -18,24 +18,11 @@ def main():
 
     engine = InfiniGramEngine(
         index_dir="",
-        s3_names=['v4_pileval_llama'],
-        # s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
-        eos_token_id=2,
+        s3_names=['aljazeera'],
+        s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
+        eos_token_id=tokenizer.eos_token_id,
         read_type="s3",
     )
-
-    # Timing sequential.
-    # times = []
-    # for it in range(5):
-    #     query_ids = [random.randint(0, 65535) for _ in range(5)]
-    #     start_time = time.time()
-    #     result = engine.count(input_ids=query_ids)
-    #     print(result)
-    #     end_time = time.time()
-    #     times.append(end_time - start_time)
-    # print('Average time:', np.mean(times))
-
-    text = "save hundreds of south korean firefighters are battling a major fire in a deprived area located on the fringe of the upmarket gangnam district in the capital"
 
     # Timing threading.
     start = time.time()
@@ -45,7 +32,7 @@ def main():
                 engine.find,
                 input_ids=query_ids
             )
-            for query_ids in [tokenizer.encode(text) for _ in range(10)]
+            for query_ids in [[random.randint(0, 65535) for _ in range(10)] for _ in range(200)]
         )
 
         for future in as_completed(futures):
