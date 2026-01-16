@@ -18,21 +18,21 @@ def main():
 
     engine = InfiniGramEngine(
         index_dir="",
-        s3_names=['v4_pileval_llama'],
-        # s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
+        s3_names=['aljazeera'],
+        s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
         eos_token_id=tokenizer.eos_token_id,
         read_type="s3",
     )
 
     # Timing threading.
     start = time.time()
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    with ThreadPoolExecutor(max_workers=100) as executor:
         futures = (
             executor.submit(
                 engine.find,
                 input_ids=query_ids
             )
-            for query_ids in [[random.randint(0, 65535) for _ in range(5)] for _ in range(50)]
+            for query_ids in [[random.randint(0, 65535) for _ in range(5)] for _ in range(100)]
         )
 
         for future in as_completed(futures):
