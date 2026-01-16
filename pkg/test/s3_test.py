@@ -32,7 +32,7 @@ def main():
                 engine.find,
                 input_ids=query_ids
             )
-            for query_ids in [[random.randint(0, 65535) for _ in range(10)] for _ in range(100)]
+            for query_ids in [[random.randint(0, 65535) for _ in range(5)] for _ in range(100)]
         )
 
         for future in as_completed(futures):
