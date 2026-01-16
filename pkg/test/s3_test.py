@@ -9,7 +9,7 @@ def main():
 
     engine = InfiniGramEngine(
         index_dir="",
-        s3_names=['v4_pileval_llama'],
+        s3_names=['v4_dolmasample_olmo'],
         eos_token_id=2,
         read_type="s3",
     )
