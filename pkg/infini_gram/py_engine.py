@@ -90,7 +90,7 @@ class Engine:
         self.num_shards = 0
 
         for s3_name in s3_names:
-            response = self.s3.list_objects_v2(Bucket='infini-gram', Prefix=f'index/{s3_name}')
+            response = self.s3.list_objects_v2(Bucket='infini-gram-lite', Prefix=f'index/{s3_name}')
             if 'Contents' not in response:
                 print(f'Error listing objects in index {s3_name} on S3!')
                 return
