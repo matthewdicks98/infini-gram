@@ -3,14 +3,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import random
 import time
+
+import transformers
 from infini_gram.engine import InfiniGramEngine
 
 def main():
 
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        "allenai/OLMo-7B",
+        add_bos_token=False,
+        add_eos_token=False
+    )
+
     engine = InfiniGramEngine(
         index_dir="",
         s3_names=['v4_dolmasample_olmo'],
-        eos_token_id=2,
+        eos_token_id=tokenizer.eos_token_id,
         read_type="s3",
     )
 
@@ -33,7 +41,7 @@ def main():
                 engine.count,
                 input_ids=query_ids
             )
-            for query_ids in [[random.randint(0, 65535) for _ in range(100)] for _ in range(50)]
+            for query_ids in [tokenizer.encode("what has Donald Trump been up to lately") for _ in range(10)]
         )
 
         for future in as_completed(futures):
