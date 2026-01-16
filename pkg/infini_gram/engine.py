@@ -14,6 +14,7 @@ class InfiniGramEngine:
                  prev_shards_by_index_dir = {},
                  max_support=1000, max_clause_freq=50000, max_diff_tokens=100, maxnum=1, max_disp_len=1000,
                  read_type: str = 'mmap', # [mmap, s3]
+                 s3_endpoint_url='',
                  ) -> None:
 
         assert sys.byteorder == 'little', 'This code is designed to run on little-endian machines only!'
@@ -67,7 +68,14 @@ class InfiniGramEngine:
         if read_type == 'mmap':
             self.engine = engine_class(index_dir, eos_token_id, vocab_size, version, load_to_ram, ds_prefetch_depth, sa_prefetch_depth, od_prefetch_depth, bow_ids, attribution_block_size, precompute_unigram_logprobs, prev_shards_by_index_dir)
         elif read_type == 's3':
-            self.engine = py_engine.Engine(token_width=self.token_width, s3_names=s3_names, eos_token_id=eos_token_id, vocab_size=vocab_size, version=version)
+            self.engine = py_engine.Engine(
+                token_width=self.token_width,
+                s3_names=s3_names,
+                s3_endpoint_url=s3_endpoint_url,
+                eos_token_id=eos_token_id,
+                vocab_size=vocab_size,
+                version=version,
+            )
         else:
             raise ValueError(f'Unsupported read type: {read_type}')
 

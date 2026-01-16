@@ -75,7 +75,7 @@ class Engine:
 
     def __init__(self,
         token_width: int,
-        s3_names: list[str], eos_token_id: int, vocab_size: int, version: int,
+        s3_names: list[str], s3_endpoint_url: str, eos_token_id: int, vocab_size: int, version: int,
     ):
 
         assert token_width in [1, 2, 4]
@@ -88,7 +88,11 @@ class Engine:
 
         assert sys.byteorder == 'little'
 
-        self.s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+        if isinstance(s3_endpoint_url, str) and len(s3_endpoint_url) > 0:
+            self.s3 = boto3.client('s3', endpoint_url=s3_endpoint_url, config=Config(signature_version=UNSIGNED))
+        else:
+            self.s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+
         self.shards = []
         self.num_shards = 0
 
