@@ -90,20 +90,6 @@ class Engine:
         assert sys.byteorder == 'little'
 
         if isinstance(s3_endpoint_url, str) and len(s3_endpoint_url) > 0:
-            s3_config = Config(
-                # Increase the pool to match your ThreadPoolExecutor workers (e.g., 50 shards = 50 connections)
-                max_pool_connections=100,
-
-                # Disable client-side parameter validation for a minor CPU speedup per call
-                parameter_validation=False,
-
-                # In latency-sensitive apps, multiple retries can lead to "cascading latency."
-                # Better to fail fast (0 or 1 attempt) and handle it in your find() logic.
-                retries={'max_attempts': 0},
-
-                # Force 'virtual' addressing to avoid a potential 301 redirect from S3
-                s3={'addressing_style': 'virtual'}
-            )
             self.s3 = boto3.session.Session().client('s3',
                 endpoint_url=s3_endpoint_url,
                 use_ssl=False,
