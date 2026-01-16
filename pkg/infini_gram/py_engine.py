@@ -3,6 +3,8 @@ from typing import List, Tuple, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
 
 @dataclass
 class DatastoreShard:
@@ -85,7 +87,7 @@ class Engine:
 
         assert sys.byteorder == 'little'
 
-        self.s3 = boto3.client('s3')
+        self.s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
         self.shards = []
         self.num_shards = 0
 
