@@ -6,8 +6,10 @@ from infini_gram.engine import InfiniGramEngine
 def main():
 
     engine = InfiniGramEngine(
+        index_dir="",
         s3_names=['v4_pileval_llama'],
         eos_token_id=2,
+        read_type="s3",
     )
 
     times = []
