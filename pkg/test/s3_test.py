@@ -16,7 +16,7 @@ def main():
     for it in range(1):
         query_ids = [random.randint(0, 65535) for _ in range(5)]
         start_time = time.time()
-        result = engine.count(query_ids=query_ids)
+        result = engine.count(input_ids=query_ids)
         end_time = time.time()
         times.append(end_time - start_time)
     print('Average time:', np.mean(times))
