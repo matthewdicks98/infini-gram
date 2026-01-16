@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+import time
 
 @dataclass
 class DatastoreShard:
@@ -145,7 +146,9 @@ class Engine:
 
     def get_bytes(self, key: str, b: int, e: int) -> bytes:
 
+        t = time.time()
         response = self.s3.get_object(Bucket='infini-gram-lite', Key=key, Range=f'bytes={b}-{e - 1}')
+        print(f"read_bytes - {time.time() - t:.4f}s")
         return response['Body'].read()
 
     def find(self, input_ids: List[int]) -> FindResult:

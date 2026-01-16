@@ -13,7 +13,7 @@ def main():
     )
 
     times = []
-    for it in range(20):
+    for it in range(5):
         query_ids = [random.randint(0, 65535) for _ in range(5)]
         start_time = time.time()
         result = engine.count(input_ids=query_ids)
