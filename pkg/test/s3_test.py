@@ -48,7 +48,8 @@ def main():
 
         for future in as_completed(futures):
             result = future.result()
-            # print(result)
+            print(result)
+
     end = time.time()
     print('Total time:', end - start)
 
