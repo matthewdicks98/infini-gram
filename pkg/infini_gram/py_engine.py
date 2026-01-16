@@ -91,6 +91,8 @@ class Engine:
 
         if isinstance(s3_endpoint_url, str) and len(s3_endpoint_url) > 0:
             s3_config = Config(
+                # Increase the pool to match your ThreadPoolExecutor workers (e.g., 50 shards = 50 connections)
+                max_pool_connections=100,
 
                 # Disable client-side parameter validation for a minor CPU speedup per call
                 parameter_validation=False,
