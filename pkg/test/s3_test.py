@@ -21,12 +21,11 @@ def main():
         end_time = time.time()
         times.append(end_time - start_time)
     print('Average time:', np.mean(times))
-    exit()
 
-    # input_ids = [5613, 4086, 9068]
-    #
-    # print(engine.count(input_ids=input_ids))
-    # print()
+    input_ids = [5613, 4086, 9068]
+
+    print(engine.count(input_ids=input_ids))
+    print()
     # print(engine.prob(prompt_ids=input_ids[:-1], cont_id=input_ids[-1]))
     # print()
     # print(engine.ntd(prompt_ids=input_ids[:-1]))
