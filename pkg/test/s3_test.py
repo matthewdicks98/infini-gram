@@ -26,13 +26,13 @@ def main():
 
     # Timing threading.
     start = time.time()
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=30) as executor:
         futures = (
             executor.submit(
                 engine.find,
                 input_ids=query_ids
             )
-            for query_ids in [[random.randint(0, 65535) for _ in range(5)] for _ in range(20)]
+            for query_ids in [[random.randint(0, 65535) for _ in range(5)] for _ in range(30)]
         )
 
         for future in as_completed(futures):
