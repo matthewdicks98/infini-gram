@@ -20,7 +20,7 @@ def main():
         index_dir="",
         s3_names=['aljazeera'],
         s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
-        eos_token_id=2,
+        eos_token_id=tokenizer.eos_token_id,
         read_type="s3",
     )
 
@@ -43,7 +43,7 @@ def main():
                 engine.find,
                 input_ids=query_ids
             )
-            for query_ids in [tokenizer.encode("aljazeera news") for _ in range(10)]
+            for query_ids in [tokenizer.encode("donald trump") for _ in range(10)]
         )
 
         for future in as_completed(futures):
