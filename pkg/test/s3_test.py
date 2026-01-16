@@ -18,8 +18,8 @@ def main():
 
     engine = InfiniGramEngine(
         index_dir="",
-        s3_names=['aljazeera'],
-        s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
+        s3_names=['v4_pileval_llama'],
+        # s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
         eos_token_id=tokenizer.eos_token_id,
         read_type="s3",
     )
