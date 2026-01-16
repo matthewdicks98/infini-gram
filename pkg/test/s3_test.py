@@ -9,18 +9,18 @@ from infini_gram.engine import InfiniGramEngine
 
 def main():
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
-        "allenai/OLMo-7B-hf",
-        add_bos_token=False,
-        add_eos_token=False,
-        trust_remote_code=True,
-    )
+    # tokenizer = transformers.AutoTokenizer.from_pretrained(
+    #     "allenai/OLMo-7B-hf",
+    #     add_bos_token=False,
+    #     add_eos_token=False,
+    #     trust_remote_code=True,
+    # )
 
     engine = InfiniGramEngine(
         index_dir="",
         s3_names=['aljazeera'],
         s3_endpoint_url='https://s3.eu-west-2.wasabisys.com',
-        eos_token_id=tokenizer.eos_token_id,
+        eos_token_id=2,
         read_type="s3",
     )
 
@@ -43,7 +43,7 @@ def main():
                 engine.find,
                 input_ids=query_ids
             )
-            for query_ids in [tokenizer.encode("natural language processing") for _ in range(10)]
+            for query_ids in [random.randint(0, 65535) for _ in range(5) for _ in range(10)]
         )
 
         for future in as_completed(futures):

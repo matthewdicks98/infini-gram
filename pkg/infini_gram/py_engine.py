@@ -1,3 +1,4 @@
+import os
 import sys
 from typing import List, Tuple, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -89,7 +90,12 @@ class Engine:
         assert sys.byteorder == 'little'
 
         if isinstance(s3_endpoint_url, str) and len(s3_endpoint_url) > 0:
-            self.s3 = boto3.client('s3', endpoint_url=s3_endpoint_url, config=Config(signature_version=UNSIGNED))
+            self.s3 = boto3.client('s3',
+                endpoint_url=s3_endpoint_url,
+                use_ssl=False,
+                aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+                aws_secret_access_key=os.environ["S3_SECRET_KEY"],
+            )
         else:
             self.s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
 
