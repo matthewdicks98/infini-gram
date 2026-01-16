@@ -36,7 +36,7 @@ def main():
 
     # Timing threading.
     start = time.time()
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    with ThreadPoolExecutor(max_workers=200) as executor:
         futures = (
             executor.submit(
                 engine.find,
@@ -47,7 +47,7 @@ def main():
 
         for future in as_completed(futures):
             result = future.result()
-            print(result)
+            # print(result)
     end = time.time()
     print('Total time:', end - start)
 
