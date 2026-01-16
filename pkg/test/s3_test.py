@@ -35,6 +35,8 @@ def main():
     #     times.append(end_time - start_time)
     # print('Average time:', np.mean(times))
 
+    text = "save hundreds of south korean firefighters are battling a major fire in a deprived area located on the fringe of the upmarket gangnam district in the capital"
+
     # Timing threading.
     start = time.time()
     with ThreadPoolExecutor(max_workers=200) as executor:
@@ -43,7 +45,7 @@ def main():
                 engine.find,
                 input_ids=query_ids
             )
-            for query_ids in [tokenizer.encode("donald trump") for _ in range(10)]
+            for query_ids in [tokenizer.encode(text) for _ in range(10)]
         )
 
         for future in as_completed(futures):
