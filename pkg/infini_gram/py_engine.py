@@ -103,7 +103,7 @@ class Engine:
         self.num_shards = 0
 
         for s3_name in s3_names:
-            response = self.s3.list_objects_v2(Bucket='infini-gram-lite', Prefix=f'index/{s3_name}')
+            response = self.s3.list_objects_v2(Bucket='infini-gram', Prefix=f'index/{s3_name}')
             if 'Contents' not in response:
                 print(f'Error listing objects in index {s3_name} on S3!')
                 return
@@ -131,9 +131,9 @@ class Engine:
 
             for i in range(len(ds_paths)):
                 # get ds_size by querying the object size on s3
-                ds_size = self.s3.head_object(Bucket='infini-gram-lite', Key=ds_paths[i])['ContentLength']
-                sa_size = self.s3.head_object(Bucket='infini-gram-lite', Key=sa_paths[i])['ContentLength']
-                od_size = self.s3.head_object(Bucket='infini-gram-lite', Key=od_paths[i])['ContentLength']
+                ds_size = self.s3.head_object(Bucket='infini-gram', Key=ds_paths[i])['ContentLength']
+                sa_size = self.s3.head_object(Bucket='infini-gram', Key=sa_paths[i])['ContentLength']
+                od_size = self.s3.head_object(Bucket='infini-gram', Key=od_paths[i])['ContentLength']
 
                 assert ds_size % token_width == 0
                 tok_cnt = ds_size // token_width
@@ -145,8 +145,8 @@ class Engine:
                 if len(mt_paths) == 0:
                     self.shards.append(DatastoreShard(ds=ds_paths[i], sa=sa_paths[i], tok_cnt=tok_cnt, ds_size=ds_size, ptr_size=ptr_size, od=od_paths[i], doc_cnt=doc_cnt))
                 else:
-                    mt_size = self.s3.head_object(Bucket='infini-gram-lite', Key=mt_paths[i])['ContentLength']
-                    om_size = self.s3.head_object(Bucket='infini-gram-lite', Key=om_paths[i])['ContentLength']
+                    mt_size = self.s3.head_object(Bucket='infini-gram', Key=mt_paths[i])['ContentLength']
+                    om_size = self.s3.head_object(Bucket='infini-gram', Key=om_paths[i])['ContentLength']
 
                     assert om_size == doc_cnt * 8
 
@@ -157,7 +157,7 @@ class Engine:
     def get_bytes(self, key: str, b: int, e: int) -> bytes:
 
         t = time.time()
-        response = self.s3.get_object(Bucket='infini-gram-lite', Key=key, Range=f'bytes={b}-{e - 1}')
+        response = self.s3.get_object(Bucket='infini-gram', Key=key, Range=f'bytes={b}-{e - 1}')
         print(f"get_bytes - {time.time() - t:.4f}s")
         return response['Body'].read()
 
