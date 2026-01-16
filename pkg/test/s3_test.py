@@ -8,8 +8,6 @@ def main():
     engine = InfiniGramEngine(
         s3_names=['v4_pileval_llama'],
         eos_token_id=2,
-        token_width=2,
-
     )
 
     times = []
