@@ -26,7 +26,7 @@ def main():
 
     # Timing threading.
     start = time.time()
-    concurrency = 30
+    concurrency = 1
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = (
             executor.submit(
@@ -42,6 +42,7 @@ def main():
 
     end = time.time()
     print('Total time:', end - start)
+    print(engine.engine.n_gets)
 
     # input_ids = [5613, 4086, 9068]
     #

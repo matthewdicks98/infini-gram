@@ -156,6 +156,7 @@ class Engine:
         self.BLOCK_SIZE = 64 * 1024
         self.global_sa_cache = {}
         self.preload_top_sa_levels(levels=5)
+        self.n_gets = 0
 
         self.num_shards = len(self.shards)
 
@@ -354,6 +355,7 @@ class Engine:
         # S3 range is inclusive
         response = self.s3.get_object(Bucket='infini-gram', Key=key, Range=f'bytes={b}-{fetch_end - 1}')
         data = response['Body'].read()
+        self.n_gets += 1
         # print(f"--- S3 FETCH: {key} (Bytes {b}-{b+len(data)}) ---") # Uncomment to debug
         return data, b, b + len(data)
 
