@@ -372,10 +372,11 @@ class Engine:
             byte_pos = rank * shard.ptr_size
             # If not in SA cache, fetch new block
             if not (sa_cache["start"] <= byte_pos and byte_pos + shard.ptr_size <= sa_cache["end"]):
-                print("MISS CACHE get_ptr_at_rank_cached")
                 sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
                     shard.sa, byte_pos, shard.tok_cnt * shard.ptr_size, BLOCK_SIZE
                 )
+            else:
+                print("HIT CACHE get_ds_bytes_cached")
 
             offset = byte_pos - sa_cache["start"]
             ptr_bytes = sa_cache["data"][offset: offset + shard.ptr_size]
@@ -385,10 +386,11 @@ class Engine:
             nonlocal ds_cache
             # If not in DS cache, fetch new block
             if not (ds_cache["start"] <= ptr and ptr + num_bytes <= ds_cache["end"]):
-                print("MISS CACHE get_ds_bytes_cached")
                 ds_cache["data"], ds_cache["start"], ds_cache["end"] = self.get_bytes_block(
                     shard.ds, ptr, shard.ds_size, BLOCK_SIZE
                 )
+            else:
+                print("HIT CACHE get_ds_bytes_cached")
 
             offset = ptr - ds_cache["start"]
             return ds_cache["data"][offset: offset + num_bytes]
