@@ -153,10 +153,10 @@ class Engine:
 
                     self.shards.append(DatastoreShard(ds=ds_paths[i], sa=sa_paths[i], tok_cnt=tok_cnt, ds_size=ds_size, ptr_size=ptr_size, od=od_paths[i], doc_cnt=doc_cnt, mt=mt_paths[i], mt_size=mt_size, om=om_paths[i]))
 
+        self.n_gets = 0
         self.BLOCK_SIZE = 64 * 1024
         self.global_sa_cache = {}
         self.preload_top_sa_levels(levels=5)
-        self.n_gets = 0
 
         self.num_shards = len(self.shards)
 
@@ -351,11 +351,11 @@ class Engine:
 
     def get_bytes_block(self, key: str, b: int, total_size: int, block_size: int) -> Tuple[bytes, int, int]:
         """Fetches a 128KB block to minimize S3 overhead."""
+        self.n_gets += 1
         fetch_end = min(b + block_size, total_size)
         # S3 range is inclusive
         response = self.s3.get_object(Bucket='infini-gram', Key=key, Range=f'bytes={b}-{fetch_end - 1}')
         data = response['Body'].read()
-        self.n_gets += 1
         # print(f"--- S3 FETCH: {key} (Bytes {b}-{b+len(data)}) ---") # Uncomment to debug
         return data, b, b + len(data)
 
