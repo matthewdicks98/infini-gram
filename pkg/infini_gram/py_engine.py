@@ -370,16 +370,40 @@ class Engine:
 
         # 128KB is the sweet spot for S3 throughput vs latency
 
+        # def get_ptr_at_rank_cached(rank: int) -> int:
+        #     nonlocal sa_cache
+        #     byte_pos = rank * shard.ptr_size
+        #     # If not in SA cache, fetch new block
+        #     if not (sa_cache["start"] <= byte_pos and byte_pos + shard.ptr_size <= sa_cache["end"]):
+        #         sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
+        #             shard.sa, byte_pos, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
+        #         )
+        #     else:
+        #         print("HIT CACHE get_ds_bytes_cached")
+        #
+        #     offset = byte_pos - sa_cache["start"]
+        #     ptr_bytes = sa_cache["data"][offset: offset + shard.ptr_size]
+        #     return int.from_bytes(ptr_bytes, 'little')
+
         def get_ptr_at_rank_cached(rank: int) -> int:
             nonlocal sa_cache
             byte_pos = rank * shard.ptr_size
-            # If not in SA cache, fetch new block
+            block_id = byte_pos // self.BLOCK_SIZE
+            offset_in_block = byte_pos % self.BLOCK_SIZE
+
+            # 1. Check Global Cache (Preloaded Top Levels)
+            if (s, block_id) in self.global_sa_cache:
+                block_data = self.global_sa_cache[(s, block_id)]
+                ptr_bytes = block_data[offset_in_block: offset_in_block + shard.ptr_size]
+                return int.from_bytes(ptr_bytes, 'little')
+
+            # 2. Check Local Thread Cache (Later refinement steps)
             if not (sa_cache["start"] <= byte_pos and byte_pos + shard.ptr_size <= sa_cache["end"]):
+                # We use an aligned fetch here to ensure we don't fetch overlapping fragments
+                aligned_start = block_id * self.BLOCK_SIZE
                 sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
-                    shard.sa, byte_pos, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
+                    shard.sa, aligned_start, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
                 )
-            else:
-                print("HIT CACHE get_ds_bytes_cached")
 
             offset = byte_pos - sa_cache["start"]
             ptr_bytes = sa_cache["data"][offset: offset + shard.ptr_size]
