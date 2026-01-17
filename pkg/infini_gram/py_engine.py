@@ -347,6 +347,7 @@ class Engine:
     def get_bytes_block(self, key: str, b: int, total_size: int, block_size: int = 65536) -> Tuple[bytes, int, int]:
         """Fetches a 64KB block (default) from S3 to reduce request overhead."""
         fetch_end = min(b + block_size, total_size)
+        print(f"bytes read - {fetch_end - b - 1}")
         response = self.s3.get_object(Bucket='infini-gram', Key=key, Range=f'bytes={b}-{fetch_end - 1}')
         data = response['Body'].read()
         return data, b, b + len(data)
