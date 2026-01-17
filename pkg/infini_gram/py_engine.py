@@ -350,7 +350,7 @@ class Engine:
         # S3 range is inclusive
         response = self.s3.get_object(Bucket='infini-gram', Key=key, Range=f'bytes={b}-{fetch_end - 1}')
         data = response['Body'].read()
-        print(f"--- S3 FETCH: {key} (Bytes {b}-{b+len(data)}) ---") # Uncomment to debug
+        # print(f"--- S3 FETCH: {key} (Bytes {b}-{b+len(data)}) ---") # Uncomment to debug
         return data, b, b + len(data)
 
     def _find_thread_cache(self, s: int, input_bytes: bytes, num_bytes: int, hint_segment: Tuple[int, int]) -> Tuple[
@@ -372,7 +372,7 @@ class Engine:
             byte_pos = rank * shard.ptr_size
             # If not in SA cache, fetch new block
             if not (sa_cache["start"] <= byte_pos and byte_pos + shard.ptr_size <= sa_cache["end"]):
-                print("HIT CACHE get_ptr_at_rank_cached")
+                # print("HIT CACHE get_ptr_at_rank_cached")
                 sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
                     shard.sa, byte_pos, shard.tok_cnt * shard.ptr_size, BLOCK_SIZE
                 )
@@ -385,7 +385,7 @@ class Engine:
             nonlocal ds_cache
             # If not in DS cache, fetch new block
             if not (ds_cache["start"] <= ptr and ptr + num_bytes <= ds_cache["end"]):
-                print("HIT CACHE get_ds_bytes_cached")
+                # print("HIT CACHE get_ds_bytes_cached")
                 ds_cache["data"], ds_cache["start"], ds_cache["end"] = self.get_bytes_block(
                     shard.ds, ptr, shard.ds_size, BLOCK_SIZE
                 )
