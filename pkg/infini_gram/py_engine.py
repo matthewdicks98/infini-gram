@@ -176,7 +176,7 @@ class Engine:
         num_bytes = len(input_ids) * self.token_width
 
         with ThreadPoolExecutor(max_workers=self.num_shards) as executor:
-            futures = [executor.submit(self._find_thread, s, input_bytes, num_bytes, hint_segment_by_shard[s]) for s in range(self.num_shards)]
+            futures = [executor.submit(self._find_thread_cache, s, input_bytes, num_bytes, hint_segment_by_shard[s]) for s in range(self.num_shards)]
             segment_by_shard = [future.result() for future in futures]
 
         cnt = sum(segment[1] - segment[0] for segment in segment_by_shard)
@@ -224,6 +224,83 @@ class Engine:
             ptr = self._convert_rank_to_ptr(s, m)
             ds_bytes = self.get_bytes(shard.ds, ptr, min(ptr + num_bytes, shard.ds_size))
             if input_bytes < ds_bytes:
+                r = m
+            else:
+                l = m
+        right = r
+
+        return (left, right)
+
+    def _find_thread_cache(self, s: int, input_bytes: bytes, num_bytes: int, hint_segment: Tuple[int, int]) -> Tuple[
+        int, int]:
+        shard = self.shards[s]
+        if num_bytes == 0:
+            return (0, shard.tok_cnt)
+
+        # Cache settings
+        BLOCK_SIZE = 65536  # 64KB
+
+        # Cache for Data Store (.ds)
+        ds_cache = {'data': b'', 'start': -1, 'end': -1}
+        # Cache for Suffix Array (.sa)
+        sa_cache = {'data': b'', 'start': -1, 'end': -1}
+
+        def get_bytes_cached(key: str, ptr: int, length: int, cache: dict, total_size: int) -> bytes:
+            """Generic block-fetcher for a specific file cache."""
+            if not (cache['start'] <= ptr and ptr + length <= cache['end']):
+                # Fetch new block
+                cache['data'], cache['start'], cache['end'] = self.get_bytes_block(
+                    key, ptr, total_size, BLOCK_SIZE
+                )
+
+            offset = ptr - cache['start']
+            return cache['data'][offset: offset + length]
+
+        def get_ptr_from_rank(rank: int) -> int:
+            """Replaces _convert_rank_to_ptr with caching logic."""
+            start_byte = rank * shard.ptr_size
+            ptr_bytes = get_bytes_cached(
+                shard.sa, start_byte, shard.ptr_size, sa_cache, shard.tok_cnt * shard.ptr_size
+            )
+            return int.from_bytes(ptr_bytes, 'little')
+
+        def get_ds_bytes(rank: int) -> bytes:
+            """Gets data bytes by first resolving rank to ptr, then fetching from ds cache."""
+            ptr = get_ptr_from_rank(rank)
+            return get_bytes_cached(
+                shard.ds, ptr, num_bytes, ds_cache, shard.ds_size
+            )
+
+        # --- Binary Search Logic ---
+        lo, hi = hint_segment
+        while lo < hi:
+            mi = (lo + hi - 1) // 2
+            ds_bytes = get_ds_bytes(mi)
+            if ds_bytes < input_bytes:
+                lo = mi + 1
+            elif ds_bytes > input_bytes:
+                hi = mi
+            else:
+                break
+
+        if lo == hi:
+            return (lo, lo)
+
+        # search left boundary
+        l, r = lo - 1, mi
+        while r - l > 1:
+            m = (l + r) // 2
+            if get_ds_bytes(m) < input_bytes:
+                l = m
+            else:
+                r = m
+        left = r
+
+        # search right boundary
+        l, r = mi, hi
+        while r - l > 1:
+            m = (l + r) // 2
+            if input_bytes < get_ds_bytes(m):
                 r = m
             else:
                 l = m
