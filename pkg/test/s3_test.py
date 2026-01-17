@@ -23,7 +23,6 @@ def main():
         eos_token_id=tokenizer.eos_token_id,
         read_type="s3",
     )
-    engine.preload_top_sa_levels(levels=10)
 
     # Timing threading.
     start = time.time()

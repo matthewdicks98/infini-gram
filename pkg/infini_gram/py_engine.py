@@ -155,6 +155,7 @@ class Engine:
 
         self.BLOCK_SIZE = 64 * 1024
         self.global_sa_cache = {}
+        self.preload_top_sa_levels(levels=10)
 
         self.num_shards = len(self.shards)
 
