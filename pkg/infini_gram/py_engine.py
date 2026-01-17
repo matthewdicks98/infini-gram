@@ -405,6 +405,7 @@ class Engine:
                 sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
                     shard.sa, aligned_start, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
                 )
+                print("MISS LOCAL")
             else:
                 print("HIT LOCAL")
 
@@ -419,6 +420,7 @@ class Engine:
                 ds_cache["data"], ds_cache["start"], ds_cache["end"] = self.get_bytes_block(
                     shard.ds, ptr, shard.ds_size, self.BLOCK_SIZE
                 )
+                print("MISS DS CACHE")
             else:
                 print("HIT DS CACHE")
 
