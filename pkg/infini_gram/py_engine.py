@@ -404,6 +404,7 @@ class Engine:
                 sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
                     shard.sa, aligned_start, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
                 )
+                print(f"MISS CACHE")
 
             offset = byte_pos - sa_cache["start"]
             ptr_bytes = sa_cache["data"][offset: offset + shard.ptr_size]
@@ -416,8 +417,7 @@ class Engine:
                 ds_cache["data"], ds_cache["start"], ds_cache["end"] = self.get_bytes_block(
                     shard.ds, ptr, shard.ds_size, self.BLOCK_SIZE
                 )
-            else:
-                print("HIT CACHE get_ds_bytes_cached")
+                print(f"MISS CACHE")
 
             offset = ptr - ds_cache["start"]
             return ds_cache["data"][offset: offset + num_bytes]
