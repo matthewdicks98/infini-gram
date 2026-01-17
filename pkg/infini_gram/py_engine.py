@@ -231,82 +231,59 @@ class Engine:
 
         return (left, right)
 
-    def _find_thread_cache(self, s: int, input_bytes: bytes, num_bytes: int, hint_segment: Tuple[int, int]) -> Tuple[
-        int, int]:
+    def _convert_rank_to_ptr(self, s: int, rank: int) -> int:
         shard = self.shards[s]
-        if num_bytes == 0:
-            return (0, shard.tok_cnt)
+        assert rank < shard.tok_cnt
+        ptr_bytes = self.get_bytes(shard.sa, rank * shard.ptr_size, rank * shard.ptr_size + shard.ptr_size)
+        ptr = int.from_bytes(ptr_bytes, 'little')
+        return ptr
 
-        # Cache settings
-        BLOCK_SIZE = 65536  # 64KB
+    def _convert_ptr_to_token_id(self, s: int, ptr: int) -> int:
+        shard = self.shards[s]
+        assert ptr % self.token_width == 0
+        assert ptr <= shard.ds_size
+        if ptr == shard.ds_size:
+            return self.eos_token_id
+        token_id_bytes = self.get_bytes(shard.ds, ptr, ptr + self.token_width)
+        token_id = int.from_bytes(token_id_bytes, 'little')
+        if token_id == self.doc_sep_id:
+            token_id = self.eos_token_id
+        return token_id
 
-        # Cache for Data Store (.ds)
-        ds_cache = {'data': b'', 'start': -1, 'end': -1}
-        # Cache for Suffix Array (.sa)
-        sa_cache = {'data': b'', 'start': -1, 'end': -1}
+    def _convert_doc_ix_to_ptr(self, s: int, doc_ix: int) -> int:
+        shard = self.shards[s]
+        assert doc_ix <= shard.doc_cnt
+        if doc_ix == shard.doc_cnt:
+            return shard.ds_size
+        ptr_bytes = self.get_bytes(shard.od, doc_ix * 8, doc_ix * 8 + 8)
+        ptr = int.from_bytes(ptr_bytes, 'little')
+        return ptr
 
-        def get_bytes_cached(key: str, ptr: int, length: int, cache: dict, total_size: int) -> bytes:
-            """Generic block-fetcher for a specific file cache."""
-            if not (cache['start'] <= ptr and ptr + length <= cache['end']):
-                # Fetch new block
-                cache['data'], cache['start'], cache['end'] = self.get_bytes_block(
-                    key, ptr, total_size, BLOCK_SIZE
-                )
+    def _convert_doc_ix_to_meta_ptr(self, s: int, doc_ix: int) -> int:
+        shard = self.shards[s]
+        assert doc_ix <= shard.doc_cnt
+        if doc_ix == shard.doc_cnt:
+            return shard.mt_size
+        ptr_bytes = self.get_bytes(shard.om, doc_ix * 8, doc_ix * 8 + 8)
+        ptr = int.from_bytes(ptr_bytes, 'little')
+        return ptr
 
-            offset = ptr - cache['start']
-            return cache['data'][offset: offset + length]
+    def get_num_shards(self) -> int:
+        return self.num_shards
 
-        def get_ptr_from_rank(rank: int) -> int:
-            """Replaces _convert_rank_to_ptr with caching logic."""
-            start_byte = rank * shard.ptr_size
-            ptr_bytes = get_bytes_cached(
-                shard.sa, start_byte, shard.ptr_size, sa_cache, shard.tok_cnt * shard.ptr_size
-            )
-            return int.from_bytes(ptr_bytes, 'little')
+    def get_tok_cnt(self, s: int) -> int:
+        assert 0 <= s < self.num_shards
+        return self.shards[s].tok_cnt
 
-        def get_ds_bytes(rank: int) -> bytes:
-            """Gets data bytes by first resolving rank to ptr, then fetching from ds cache."""
-            ptr = get_ptr_from_rank(rank)
-            return get_bytes_cached(
-                shard.ds, ptr, num_bytes, ds_cache, shard.ds_size
-            )
+    def get_ds_size(self, s: int) -> int:
+        assert 0 <= s < self.num_shards
+        return self.shards[s].ds_size
 
-        # --- Binary Search Logic ---
-        lo, hi = hint_segment
-        while lo < hi:
-            mi = (lo + hi - 1) // 2
-            ds_bytes = get_ds_bytes(mi)
-            if ds_bytes < input_bytes:
-                lo = mi + 1
-            elif ds_bytes > input_bytes:
-                hi = mi
-            else:
-                break
+    def get_total_tok_cnt(self) -> int:
+        return sum(shard.tok_cnt for shard in self.shards)
 
-        if lo == hi:
-            return (lo, lo)
-
-        # search left boundary
-        l, r = lo - 1, mi
-        while r - l > 1:
-            m = (l + r) // 2
-            if get_ds_bytes(m) < input_bytes:
-                l = m
-            else:
-                r = m
-        left = r
-
-        # search right boundary
-        l, r = mi, hi
-        while r - l > 1:
-            m = (l + r) // 2
-            if input_bytes < get_ds_bytes(m):
-                r = m
-            else:
-                l = m
-        right = r
-
-        return (left, right)
+    def get_total_doc_cnt(self) -> int:
+        return sum(shard.doc_cnt for shard in self.shards)
 
     def count(self, input_ids: List[int]) -> CountResult:
 
@@ -367,56 +344,90 @@ class Engine:
 
         return DocResult(doc_ix=doc_ix, doc_len=doc_len, disp_len=disp_len, needle_offset=needle_offset, metadata=metadata, token_ids=token_ids, blocked=False)
 
-    def get_num_shards(self) -> int:
-        return self.num_shards
+    def get_bytes_block(self, key: str, b: int, total_size: int, block_size: int = 65536) -> Tuple[bytes, int, int]:
+        """Fetches a 64KB block (default) from S3 to reduce request overhead."""
+        fetch_end = min(b + block_size, total_size)
+        response = self.s3.get_object(Bucket='infini-gram', Key=key, Range=f'bytes={b}-{fetch_end - 1}')
+        data = response['Body'].read()
+        return data, b, b + len(data)
 
-    def get_tok_cnt(self, s: int) -> int:
-        assert 0 <= s < self.num_shards
-        return self.shards[s].tok_cnt
-
-    def get_ds_size(self, s: int) -> int:
-        assert 0 <= s < self.num_shards
-        return self.shards[s].ds_size
-
-    def get_total_tok_cnt(self) -> int:
-        return sum(shard.tok_cnt for shard in self.shards)
-
-    def get_total_doc_cnt(self) -> int:
-        return sum(shard.doc_cnt for shard in self.shards)
-
-    def _convert_ptr_to_token_id(self, s: int, ptr: int) -> int:
+    def _convert_rank_to_ptr_cached(self, s: int, rank: int, cache: dict) -> int:
+        """Version of _convert_rank_to_ptr that utilizes a block cache."""
         shard = self.shards[s]
-        assert ptr % self.token_width == 0
-        assert ptr <= shard.ds_size
-        if ptr == shard.ds_size:
-            return self.eos_token_id
-        token_id_bytes = self.get_bytes(shard.ds, ptr, ptr + self.token_width)
-        token_id = int.from_bytes(token_id_bytes, 'little')
-        if token_id == self.doc_sep_id:
-            token_id = self.eos_token_id
-        return token_id
+        byte_offset = rank * shard.ptr_size
 
-    def _convert_rank_to_ptr(self, s: int, rank: int) -> int:
-        shard = self.shards[s]
-        assert rank < shard.tok_cnt
-        ptr_bytes = self.get_bytes(shard.sa, rank * shard.ptr_size, rank * shard.ptr_size + shard.ptr_size)
-        ptr = int.from_bytes(ptr_bytes, 'little')
-        return ptr
+        # If byte_offset is not in the current cache, fetch a new block
+        if not (cache['start'] <= byte_offset and byte_offset + shard.ptr_size <= cache['end']):
+            cache['data'], cache['start'], cache['end'] = self.get_bytes_block(
+                shard.sa, byte_offset, shard.tok_cnt * shard.ptr_size
+            )
 
-    def _convert_doc_ix_to_ptr(self, s: int, doc_ix: int) -> int:
-        shard = self.shards[s]
-        assert doc_ix <= shard.doc_cnt
-        if doc_ix == shard.doc_cnt:
-            return shard.ds_size
-        ptr_bytes = self.get_bytes(shard.od, doc_ix * 8, doc_ix * 8 + 8)
-        ptr = int.from_bytes(ptr_bytes, 'little')
-        return ptr
+        relative_offset = byte_offset - cache['start']
+        ptr_bytes = cache['data'][relative_offset: relative_offset + shard.ptr_size]
+        return int.from_bytes(ptr_bytes, 'little')
 
-    def _convert_doc_ix_to_meta_ptr(self, s: int, doc_ix: int) -> int:
+    def _get_ds_bytes_cached(self, s: int, ptr: int, num_bytes: int, cache: dict) -> bytes:
+        """Fetches tokens from the Datastore (.ds) using a block cache."""
         shard = self.shards[s]
-        assert doc_ix <= shard.doc_cnt
-        if doc_ix == shard.doc_cnt:
-            return shard.mt_size
-        ptr_bytes = self.get_bytes(shard.om, doc_ix * 8, doc_ix * 8 + 8)
-        ptr = int.from_bytes(ptr_bytes, 'little')
-        return ptr
+
+        if not (cache['start'] <= ptr and ptr + num_bytes <= cache['end']):
+            cache['data'], cache['start'], cache['end'] = self.get_bytes_block(
+                shard.ds, ptr, shard.ds_size
+            )
+
+        relative_offset = ptr - cache['start']
+        return cache['data'][relative_offset: relative_offset + num_bytes]
+
+    def _find_thread_cache(self, s: int, input_bytes: bytes, num_bytes: int, hint_segment: Tuple[int, int]) -> Tuple[
+        int, int]:
+        shard = self.shards[s]
+        if num_bytes == 0:
+            return (0, shard.tok_cnt)
+
+        # Initialize local caches for this specific thread
+        sa_cache = {'data': b'', 'start': -1, 'end': -1}
+        ds_cache = {'data': b'', 'start': -1, 'end': -1}
+
+        lo, hi = hint_segment
+        while lo < hi:
+            mi = (lo + hi - 1) // 2
+            # Use cached rank lookup
+            ptr = self._convert_rank_to_ptr_cached(s, mi, sa_cache)
+            # Use cached datastore lookup
+            ds_bytes = self._get_ds_bytes_cached(s, ptr, num_bytes, ds_cache)
+
+            if ds_bytes < input_bytes:
+                lo = mi + 1
+            elif ds_bytes > input_bytes:
+                hi = mi
+            else:
+                break
+
+        if lo == hi:
+            return (lo, lo)
+
+        # Search left boundary
+        l, r = lo - 1, mi
+        while r - l > 1:
+            m = (l + r) // 2
+            ptr = self._convert_rank_to_ptr_cached(s, m, sa_cache)
+            ds_bytes = self._get_ds_bytes_cached(s, ptr, num_bytes, ds_cache)
+            if ds_bytes < input_bytes:
+                l = m
+            else:
+                r = m
+        left = r
+
+        # Search right boundary
+        l, r = mi, hi
+        while r - l > 1:
+            m = (l + r) // 2
+            ptr = self._convert_rank_to_ptr_cached(s, m, sa_cache)
+            ds_bytes = self._get_ds_bytes_cached(s, ptr, num_bytes, ds_cache)
+            if input_bytes < ds_bytes:
+                r = m
+            else:
+                l = m
+        right = r
+
+        return (left, right)
