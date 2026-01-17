@@ -26,7 +26,7 @@ def main():
 
     # Timing threading.
     start = time.time()
-    concurrency = 50
+    concurrency = 1
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = (
             executor.submit(
