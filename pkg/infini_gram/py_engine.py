@@ -359,6 +359,7 @@ class Engine:
 
         # If byte_offset is not in the current cache, fetch a new block
         if not (cache['start'] <= byte_offset and byte_offset + shard.ptr_size <= cache['end']):
+            print("HIT _convert_rank_to_ptr_cached")
             cache['data'], cache['start'], cache['end'] = self.get_bytes_block(
                 shard.sa, byte_offset, shard.tok_cnt * shard.ptr_size
             )
@@ -372,6 +373,7 @@ class Engine:
         shard = self.shards[s]
 
         if not (cache['start'] <= ptr and ptr + num_bytes <= cache['end']):
+            print("HIT _get_ds_bytes_cached")
             cache['data'], cache['start'], cache['end'] = self.get_bytes_block(
                 shard.ds, ptr, shard.ds_size
             )
