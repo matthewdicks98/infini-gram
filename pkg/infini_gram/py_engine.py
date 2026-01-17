@@ -393,6 +393,7 @@ class Engine:
 
             # 1. Check Global Cache (Preloaded Top Levels)
             if (s, block_id) in self.global_sa_cache:
+                print("HIT GLOBAL")
                 block_data = self.global_sa_cache[(s, block_id)]
                 ptr_bytes = block_data[offset_in_block: offset_in_block + shard.ptr_size]
                 return int.from_bytes(ptr_bytes, 'little')
@@ -404,7 +405,8 @@ class Engine:
                 sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
                     shard.sa, aligned_start, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
                 )
-                print(f"MISS CACHE")
+            else:
+                print("HIT LOCAL")
 
             offset = byte_pos - sa_cache["start"]
             ptr_bytes = sa_cache["data"][offset: offset + shard.ptr_size]
@@ -417,7 +419,8 @@ class Engine:
                 ds_cache["data"], ds_cache["start"], ds_cache["end"] = self.get_bytes_block(
                     shard.ds, ptr, shard.ds_size, self.BLOCK_SIZE
                 )
-                print(f"MISS CACHE")
+            else:
+                print("HIT DS CACHE")
 
             offset = ptr - ds_cache["start"]
             return ds_cache["data"][offset: offset + num_bytes]
