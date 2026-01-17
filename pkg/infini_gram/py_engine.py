@@ -153,6 +153,9 @@ class Engine:
 
                     self.shards.append(DatastoreShard(ds=ds_paths[i], sa=sa_paths[i], tok_cnt=tok_cnt, ds_size=ds_size, ptr_size=ptr_size, od=od_paths[i], doc_cnt=doc_cnt, mt=mt_paths[i], mt_size=mt_size, om=om_paths[i]))
 
+        self.BLOCK_SIZE = 64 * 1024
+        self.global_sa_cache = {}
+
         self.num_shards = len(self.shards)
 
     def get_bytes(self, key: str, b: int, e: int) -> bytes:
@@ -344,7 +347,7 @@ class Engine:
 
         return DocResult(doc_ix=doc_ix, doc_len=doc_len, disp_len=disp_len, needle_offset=needle_offset, metadata=metadata, token_ids=token_ids, blocked=False)
 
-    def get_bytes_block(self, key: str, b: int, total_size: int, block_size: int = 131072) -> Tuple[bytes, int, int]:
+    def get_bytes_block(self, key: str, b: int, total_size: int, block_size: int) -> Tuple[bytes, int, int]:
         """Fetches a 128KB block to minimize S3 overhead."""
         fetch_end = min(b + block_size, total_size)
         # S3 range is inclusive
@@ -365,7 +368,6 @@ class Engine:
         ds_cache = {"data": b"", "start": -1, "end": -1}
 
         # 128KB is the sweet spot for S3 throughput vs latency
-        BLOCK_SIZE = 128 * 1024
 
         def get_ptr_at_rank_cached(rank: int) -> int:
             nonlocal sa_cache
@@ -373,7 +375,7 @@ class Engine:
             # If not in SA cache, fetch new block
             if not (sa_cache["start"] <= byte_pos and byte_pos + shard.ptr_size <= sa_cache["end"]):
                 sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
-                    shard.sa, byte_pos, shard.tok_cnt * shard.ptr_size, BLOCK_SIZE
+                    shard.sa, byte_pos, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
                 )
             else:
                 print("HIT CACHE get_ds_bytes_cached")
@@ -387,7 +389,7 @@ class Engine:
             # If not in DS cache, fetch new block
             if not (ds_cache["start"] <= ptr and ptr + num_bytes <= ds_cache["end"]):
                 ds_cache["data"], ds_cache["start"], ds_cache["end"] = self.get_bytes_block(
-                    shard.ds, ptr, shard.ds_size, BLOCK_SIZE
+                    shard.ds, ptr, shard.ds_size, self.BLOCK_SIZE
                 )
             else:
                 print("HIT CACHE get_ds_bytes_cached")
@@ -436,3 +438,27 @@ class Engine:
         right = r
 
         return (left, right)
+
+    def preload_top_sa_levels(self, levels: int = 10):
+        """Calculates and fetches the Suffix Array blocks used in the first N steps of search."""
+        for s_idx, shard in enumerate(self.shards):
+            ranks_to_fetch = set()
+
+            def get_ranks(lo, hi, depth):
+                if depth > levels or lo >= hi:
+                    return
+                mi = (lo + hi - 1) // 2
+                ranks_to_fetch.add(mi)
+                get_ranks(lo, mi, depth + 1)
+                get_ranks(mi + 1, hi, depth + 1)
+
+            get_ranks(0, shard.tok_cnt, 1)
+
+            # Convert ranks to block IDs to avoid redundant S3 fetches
+            # (r * ptr_size) gives the byte offset in the .sa file
+            block_ids = {(r * shard.ptr_size) // self.BLOCK_SIZE for r in ranks_to_fetch}
+
+            for b_id in block_ids:
+                byte_start = b_id * self.BLOCK_SIZE
+                data, _, _ = self.get_bytes_block(shard.sa, byte_start, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE)
+                self.global_sa_cache[(s_idx, b_id)] = data
