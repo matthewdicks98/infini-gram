@@ -153,11 +153,6 @@ class Engine:
 
                     self.shards.append(DatastoreShard(ds=ds_paths[i], sa=sa_paths[i], tok_cnt=tok_cnt, ds_size=ds_size, ptr_size=ptr_size, od=od_paths[i], doc_cnt=doc_cnt, mt=mt_paths[i], mt_size=mt_size, om=om_paths[i]))
 
-        self.n_gets = 0
-        self.BLOCK_SIZE = 64 * 1024
-        self.global_sa_cache = {}
-        self.preload_top_sa_levels(levels=5)
-
         self.num_shards = len(self.shards)
 
     def get_bytes(self, key: str, b: int, e: int) -> bytes:
@@ -181,7 +176,7 @@ class Engine:
         num_bytes = len(input_ids) * self.token_width
 
         with ThreadPoolExecutor(max_workers=self.num_shards) as executor:
-            futures = [executor.submit(self._find_thread_cache, s, input_bytes, num_bytes, hint_segment_by_shard[s]) for s in range(self.num_shards)]
+            futures = [executor.submit(self._find_thread, s, input_bytes, num_bytes, hint_segment_by_shard[s]) for s in range(self.num_shards)]
             segment_by_shard = [future.result() for future in futures]
 
         cnt = sum(segment[1] - segment[0] for segment in segment_by_shard)
@@ -348,149 +343,3 @@ class Engine:
         token_ids = [int.from_bytes(token_bytes[i:i + self.token_width], 'little') for i in range(0, len(token_bytes), self.token_width)]
 
         return DocResult(doc_ix=doc_ix, doc_len=doc_len, disp_len=disp_len, needle_offset=needle_offset, metadata=metadata, token_ids=token_ids, blocked=False)
-
-    def get_bytes_block(self, key: str, b: int, total_size: int, block_size: int) -> Tuple[bytes, int, int]:
-        """Fetches a 128KB block to minimize S3 overhead."""
-        self.n_gets += 1
-        fetch_end = min(b + block_size, total_size)
-        # S3 range is inclusive
-        response = self.s3.get_object(Bucket='infini-gram', Key=key, Range=f'bytes={b}-{fetch_end - 1}')
-        data = response['Body'].read()
-        # print(f"--- S3 FETCH: {key} (Bytes {b}-{b+len(data)}) ---") # Uncomment to debug
-        return data, b, b + len(data)
-
-    def _find_thread_cache(self, s: int, input_bytes: bytes, num_bytes: int, hint_segment: Tuple[int, int]) -> Tuple[
-        int, int]:
-        shard = self.shards[s]
-        if num_bytes == 0:
-            return (0, shard.tok_cnt)
-
-        # 1. Initialize Thread-Local Caches
-        # We use a dict to allow the inner functions to modify them (nonlocal)
-        sa_cache = {"data": b"", "start": -1, "end": -1}
-        ds_cache = {"data": b"", "start": -1, "end": -1}
-
-        # 128KB is the sweet spot for S3 throughput vs latency
-
-        # def get_ptr_at_rank_cached(rank: int) -> int:
-        #     nonlocal sa_cache
-        #     byte_pos = rank * shard.ptr_size
-        #     # If not in SA cache, fetch new block
-        #     if not (sa_cache["start"] <= byte_pos and byte_pos + shard.ptr_size <= sa_cache["end"]):
-        #         sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
-        #             shard.sa, byte_pos, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
-        #         )
-        #     else:
-        #         print("HIT CACHE get_ds_bytes_cached")
-        #
-        #     offset = byte_pos - sa_cache["start"]
-        #     ptr_bytes = sa_cache["data"][offset: offset + shard.ptr_size]
-        #     return int.from_bytes(ptr_bytes, 'little')
-
-        def get_ptr_at_rank_cached(rank: int) -> int:
-            nonlocal sa_cache
-            byte_pos = rank * shard.ptr_size
-            block_id = byte_pos // self.BLOCK_SIZE
-            offset_in_block = byte_pos % self.BLOCK_SIZE
-
-            # 1. Check Global Cache (Preloaded Top Levels)
-            if (s, block_id) in self.global_sa_cache:
-                print("HIT GLOBAL")
-                block_data = self.global_sa_cache[(s, block_id)]
-                ptr_bytes = block_data[offset_in_block: offset_in_block + shard.ptr_size]
-                return int.from_bytes(ptr_bytes, 'little')
-
-            # 2. Check Local Thread Cache (Later refinement steps)
-            if not (sa_cache["start"] <= byte_pos and byte_pos + shard.ptr_size <= sa_cache["end"]):
-                # We use an aligned fetch here to ensure we don't fetch overlapping fragments
-                aligned_start = block_id * self.BLOCK_SIZE
-                sa_cache["data"], sa_cache["start"], sa_cache["end"] = self.get_bytes_block(
-                    shard.sa, aligned_start, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE
-                )
-                print("MISS LOCAL")
-            else:
-                print("HIT LOCAL")
-
-            offset = byte_pos - sa_cache["start"]
-            ptr_bytes = sa_cache["data"][offset: offset + shard.ptr_size]
-            return int.from_bytes(ptr_bytes, 'little')
-
-        def get_ds_bytes_cached(ptr: int) -> bytes:
-            nonlocal ds_cache
-            # If not in DS cache, fetch new block
-            if not (ds_cache["start"] <= ptr and ptr + num_bytes <= ds_cache["end"]):
-                ds_cache["data"], ds_cache["start"], ds_cache["end"] = self.get_bytes_block(
-                    shard.ds, ptr, shard.ds_size, self.BLOCK_SIZE
-                )
-                print("MISS DS CACHE")
-            else:
-                print("HIT DS CACHE")
-
-            offset = ptr - ds_cache["start"]
-            return ds_cache["data"][offset: offset + num_bytes]
-
-        # 2. Updated Binary Search using Local Cached Helpers
-        lo, hi = hint_segment
-        while lo < hi:
-            mi = (lo + hi - 1) // 2
-            # Use local cached helpers instead of self._convert_rank_to_ptr or self.get_bytes
-            ptr = get_ptr_at_rank_cached(mi)
-            ds_bytes = get_ds_bytes_cached(ptr)
-
-            if ds_bytes < input_bytes:
-                lo = mi + 1
-            elif ds_bytes > input_bytes:
-                hi = mi
-            else:
-                break
-
-        if lo == hi:
-            return (lo, lo)
-
-        # Search left boundary
-        l, r = lo - 1, mi
-        while r - l > 1:
-            m = (l + r) // 2
-            ptr = get_ptr_at_rank_cached(m)
-            if get_ds_bytes_cached(ptr) < input_bytes:
-                l = m
-            else:
-                r = m
-        left = r
-
-        # Search right boundary
-        l, r = mi, hi
-        while r - l > 1:
-            m = (l + r) // 2
-            ptr = get_ptr_at_rank_cached(m)
-            if input_bytes < get_ds_bytes_cached(ptr):
-                r = m
-            else:
-                l = m
-        right = r
-
-        return (left, right)
-
-    def preload_top_sa_levels(self, levels: int = 10):
-        """Calculates and fetches the Suffix Array blocks used in the first N steps of search."""
-        for s_idx, shard in enumerate(self.shards):
-            ranks_to_fetch = set()
-
-            def get_ranks(lo, hi, depth):
-                if depth > levels or lo >= hi:
-                    return
-                mi = (lo + hi - 1) // 2
-                ranks_to_fetch.add(mi)
-                get_ranks(lo, mi, depth + 1)
-                get_ranks(mi + 1, hi, depth + 1)
-
-            get_ranks(0, shard.tok_cnt, 1)
-
-            # Convert ranks to block IDs to avoid redundant S3 fetches
-            # (r * ptr_size) gives the byte offset in the .sa file
-            block_ids = {(r * shard.ptr_size) // self.BLOCK_SIZE for r in ranks_to_fetch}
-
-            for b_id in block_ids:
-                byte_start = b_id * self.BLOCK_SIZE
-                data, _, _ = self.get_bytes_block(shard.sa, byte_start, shard.tok_cnt * shard.ptr_size, self.BLOCK_SIZE)
-                self.global_sa_cache[(s_idx, b_id)] = data
